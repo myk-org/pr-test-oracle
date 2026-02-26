@@ -1,0 +1,85 @@
+name: 'PR Test Oracle'
+description: 'Analyze PR changes and recommend which tests to run'
+
+inputs:
+  oracle_url:
+    description: 'URL of the PR Test Oracle service'
+    required: true
+  ai_provider:
+    description: 'AI provider to use (claude, gemini, cursor)'
+    required: false
+    default: 'claude'
+  ai_model:
+    description: 'AI model to use'
+    required: false
+  test_patterns:
+    description: 'JSON array of test file glob patterns (e.g., ["tests/**/*.py"])'
+    required: false
+  post_comment:
+    description: 'Whether to post a PR comment with recommendations'
+    required: false
+    default: 'true'
+  github_token:
+    description: 'GitHub token for API access'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Analyze PR
+      shell: bash
+      env:
+        ORACLE_URL: ${{ inputs.oracle_url }}
+        PR_URL: ${{ github.event.pull_request.html_url }}
+        AI_PROVIDER: ${{ inputs.ai_provider }}
+        AI_MODEL: ${{ inputs.ai_model }}
+        TEST_PATTERNS: ${{ inputs.test_patterns }}
+        POST_COMMENT: ${{ inputs.post_comment }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        # Build JSON payload
+        PAYLOAD=$(jq -n \
+          --arg pr_url "$PR_URL" \
+          --arg ai_provider "$AI_PROVIDER" \
+          --arg ai_model "$AI_MODEL" \
+          --arg post_comment "$POST_COMMENT" \
+          --arg github_token "$GITHUB_TOKEN" \
+          '{
+            pr_url: $pr_url,
+            ai_provider: (if $ai_provider != "" then $ai_provider else null end),
+            ai_model: (if $ai_model != "" then $ai_model else null end),
+            post_comment: ($post_comment == "true"),
+            github_token: $github_token
+          }')
+
+        # Add test_patterns if provided
+        if [ -n "$TEST_PATTERNS" ]; then
+          PAYLOAD=$(echo "$PAYLOAD" | jq --argjson patterns "$TEST_PATTERNS" '. + {test_patterns: $patterns}')
+        fi
+
+        echo "::group::PR Test Oracle Request"
+        echo "$PAYLOAD" | jq '.'
+        echo "::endgroup::"
+
+        # Call the service
+        RESPONSE=$(curl -s -w "\n%{http_code}" \
+          -X POST "${ORACLE_URL}/analyze" \
+          -H "Content-Type: application/json" \
+          -d "$PAYLOAD")
+
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        BODY=$(echo "$RESPONSE" | sed '$d')
+
+        echo "::group::PR Test Oracle Response (HTTP $HTTP_CODE)"
+        echo "$BODY" | jq '.' 2>/dev/null || echo "$BODY"
+        echo "::endgroup::"
+
+        if [ "$HTTP_CODE" -ge 400 ]; then
+          echo "::error::PR Test Oracle returned HTTP $HTTP_CODE"
+          exit 1
+        fi
+
+        # Set outputs
+        echo "response=$BODY" >> "$GITHUB_OUTPUT"
+        echo "summary=$(echo "$BODY" | jq -r '.summary // "No summary"')" >> "$GITHUB_OUTPUT"
