@@ -66,6 +66,17 @@ class AnalyzeRequest(BaseModel):
             raise ValueError(msg)
         return v
 
+    @field_validator("prompt_file")
+    @classmethod
+    def validate_prompt_file(cls, v: str | None) -> str | None:
+        """Validate prompt_file doesn't contain path traversal."""
+        if v is None:
+            return v
+        if ".." in v:
+            msg = "prompt_file must not contain '..'"
+            raise ValueError(msg)
+        return v
+
     def parse_pr_info(self) -> PRInfo:
         """Extract owner, repo, and PR number from the validated pr_url."""
         parts = self.pr_url.rstrip("/").split("/")

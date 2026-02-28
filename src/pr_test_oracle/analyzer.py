@@ -195,8 +195,11 @@ Example:
 
     # Append custom prompt instructions if file exists
     if prompt_file:
-        prompt_path = Path(prompt_file)
-        if prompt_path.is_file():
+        prompt_path = Path(prompt_file).resolve()
+        # Reject paths with traversal indicators
+        if ".." in str(prompt_path):
+            logger.warning("Rejected prompt file with path traversal: %s", prompt_file)
+        elif prompt_path.is_file():
             try:
                 custom_instructions = prompt_path.read_text(encoding="utf-8").strip()
                 if custom_instructions:
