@@ -45,6 +45,9 @@ class AnalyzeRequest(BaseModel):
     test_patterns: list[str] | None = Field(
         default=None, description="Glob patterns for test files"
     )
+    post_comment: bool | None = Field(
+        default=None, description="Whether to post a comment on the PR (default: true)"
+    )
 
     @field_validator("pr_url")
     @classmethod

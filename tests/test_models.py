@@ -73,6 +73,10 @@ class TestAnalyzeRequest:
         assert req.repo_path == "/tmp/repo"
         assert req.ai_provider == "claude"
 
+    def test_post_comment_defaults_to_none(self, sample_pr_url: str) -> None:
+        req = AnalyzeRequest(pr_url=sample_pr_url)
+        assert req.post_comment is None
+
     def test_pr_url_with_dots_and_hyphens(self) -> None:
         """PR URLs with dots and hyphens in owner/repo should be valid."""
         req = AnalyzeRequest(pr_url="https://github.com/my-org/my.repo/pull/1")

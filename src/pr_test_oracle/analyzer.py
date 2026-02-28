@@ -64,6 +64,7 @@ def _merge_settings(body: AnalyzeRequest, settings: Settings) -> Settings:
         "ai_model",
         "ai_cli_timeout",
         "test_patterns",
+        "post_comment",
     ]
     for field in direct_fields:
         value = getattr(body, field, None)
@@ -478,19 +479,32 @@ async def analyze_pr(
         review_posted = False
         review_url = None
 
-        comment_body = _format_pr_comment(recommendations, ai_provider, ai_model)
-        try:
-            if recommendations:
+        # Determine if we should post to the PR
+        should_post = (
+            body.post_comment
+            if body.post_comment is not None
+            else settings.post_comment
+        )
+
+        if not should_post:
+            logger.info("Skipping PR comment (post_comment=false)")
+        elif recommendations:
+            comment_body = _format_pr_comment(recommendations, ai_provider, ai_model)
+            try:
                 review_url, review_posted = await gh_client.post_review(
                     pr_info, comment_body
                 )
                 logger.info("Posted PR review: %s", review_url)
-            else:
+            except RuntimeError:
+                logger.exception("Failed to post PR review")
+        else:
+            comment_body = _format_pr_comment(recommendations, ai_provider, ai_model)
+            try:
                 review_url = await gh_client.post_comment(pr_info, comment_body)
                 review_posted = False
                 logger.info("Posted PR comment: %s", review_url)
-        except RuntimeError:
-            logger.exception("Failed to post PR review")
+            except RuntimeError:
+                logger.exception("Failed to post PR comment")
 
         return AnalyzeResponse(
             pr_url=body.pr_url,
