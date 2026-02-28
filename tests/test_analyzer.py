@@ -421,6 +421,49 @@ class TestAnalyzePr:
                 with pytest.raises(ValueError, match="absolute path"):
                     await analyze_pr(body, settings)
 
+    async def test_post_comment_false_skips_posting(self, tmp_path: Path) -> None:
+        body = AnalyzeRequest(
+            pr_url="https://github.com/owner/repo/pull/1",
+            ai_provider="claude",
+            ai_model="sonnet",
+            repo_path=str(tmp_path),
+            post_comment=False,
+        )
+        settings = Settings(github_token="test-token")
+        ai_response = json.dumps(
+            [
+                {
+                    "test_file": "tests/test_auth.py",
+                    "reason": "Changed auth",
+                    "priority": "critical",
+                    "confidence": "high",
+                }
+            ]
+        )
+        with (
+            patch("pr_test_oracle.analyzer.GitHubClient") as mock_gh_class,
+            patch("pr_test_oracle.analyzer.TestMapper") as mock_mapper_class,
+            patch(
+                "pr_test_oracle.analyzer.call_ai_cli",
+                return_value=(True, ai_response),
+            ),
+        ):
+            mock_gh = mock_gh_class.return_value
+            mock_gh.get_pr_diff = AsyncMock(return_value="diff")
+            mock_gh.get_pr_files = AsyncMock(return_value=["src/auth.py"])
+            mock_mapper = mock_mapper_class.return_value
+            mock_mapper.map_changed_files.return_value = []
+            mock_mapper.get_test_file_contents.return_value = {}
+
+            result = await analyze_pr(body, settings)
+
+        assert len(result.recommendations) == 1
+        assert result.review_posted is False
+        assert result.review_url is None
+        # Verify post_review was NOT called
+        mock_gh.post_review.assert_not_called()
+        mock_gh.post_comment.assert_not_called()
+
     async def test_missing_github_token_raises(self) -> None:
         body = AnalyzeRequest(
             pr_url="https://github.com/o/r/pull/1",
