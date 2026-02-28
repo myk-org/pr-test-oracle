@@ -93,6 +93,7 @@ Analyze a PR and return test recommendations.
 | `github_token` | string | No | GitHub token for API access. Overrides the `GITHUB_TOKEN` env var. Required via env var OR per-request payload. |
 | `test_patterns` | list[string] | No | Glob patterns for test file discovery (e.g., `["tests/**/*.py"]`). Overrides the `TEST_PATTERNS` env var. |
 | `post_comment` | boolean | No | Whether to post a comment on the PR (default: true). Set false to get JSON only. |
+| `prompt_file` | string | No | Path to custom prompt file with additional AI instructions |
 
 #### Response Payload
 
@@ -183,11 +184,23 @@ All settings are loaded from environment variables (or a `.env` file). Every env
 | `AI_CLI_TIMEOUT` | AI CLI timeout in minutes | `10` | `ai_cli_timeout` |
 | `TEST_PATTERNS` | JSON array of glob patterns for test files | `["tests/**/*.py", "test_*.py"]` | `test_patterns` |
 | `POST_COMMENT` | Post recommendations on the PR | true | `post_comment` |
-| `PROMPT_FILE` | Path to a custom prompt file | `/app/PROMPT.md` | -- |
+| `PROMPT_FILE` | Path to custom AI prompt file | `/app/PROMPT.md` | `prompt_file` |
 | `LOG_LEVEL` | Logging level | `INFO` | -- |
 | `DEBUG` | Enable uvicorn auto-reload | `false` | -- |
 
 Request payload values always take precedence over environment variable defaults. This per-request override design allows a single service instance to handle requests with different providers, models, and tokens.
+
+### Custom Prompts
+
+The `PROMPT_FILE` environment variable (or per-request `prompt_file` field) specifies a path to a custom prompt file containing additional AI instructions. If the file exists, its content is appended to the AI prompt as "Additional Instructions".
+
+**Behavior:**
+
+- If `prompt_file` points to an existing file, its content is appended to the main AI prompt
+- If the file does not exist, it is silently skipped (no error is raised)
+- Available via the `PROMPT_FILE` environment variable or the `prompt_file` request field
+
+This allows you to customize AI behavior without modifying the service code. For example, you could provide a custom prompt to enforce specific test naming conventions or add domain-specific guidance.
 
 ## AI Providers
 

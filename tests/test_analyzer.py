@@ -218,6 +218,18 @@ class TestBuildAiPrompt:
         assert "JSON array" in prompt
         assert "priority" in prompt
 
+    def test_includes_custom_prompt(self, tmp_path) -> None:
+        prompt_file = tmp_path / "PROMPT.md"
+        prompt_file.write_text("Always prioritize integration tests over unit tests.")
+        prompt = _build_ai_prompt("diff", [], {}, str(prompt_file))
+        assert "Always prioritize integration tests" in prompt
+        assert "Additional Instructions" in prompt
+
+    def test_missing_prompt_file_ignored(self) -> None:
+        prompt = _build_ai_prompt("diff", [], {}, "/nonexistent/PROMPT.md")
+        assert "Additional Instructions" not in prompt
+        assert "diff" in prompt
+
 
 class TestFormatPrComment:
     """Tests for _format_pr_comment."""

@@ -48,6 +48,10 @@ class AnalyzeRequest(BaseModel):
     post_comment: bool | None = Field(
         default=None, description="Whether to post a comment on the PR (default: true)"
     )
+    prompt_file: str | None = Field(
+        default=None,
+        description="Path to custom prompt file with additional AI instructions",
+    )
 
     @field_validator("pr_url")
     @classmethod
