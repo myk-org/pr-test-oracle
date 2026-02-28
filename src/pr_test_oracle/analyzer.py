@@ -214,6 +214,17 @@ def _detect_language(file_path: str) -> str:
     return language_map.get(ext, "")
 
 
+def _parse_items(data: list) -> list[TestRecommendation]:
+    """Parse list of dicts into TestRecommendation, skipping malformed items."""
+    results: list[TestRecommendation] = []
+    for item in data:
+        try:
+            results.append(TestRecommendation(**item))
+        except (TypeError, KeyError, ValueError):
+            logger.warning("Skipping malformed recommendation item: %s", item)
+    return results
+
+
 def _parse_ai_response(raw_text: str) -> list[TestRecommendation]:
     """Parse AI CLI JSON response into TestRecommendation list.
 
@@ -225,7 +236,7 @@ def _parse_ai_response(raw_text: str) -> list[TestRecommendation]:
     try:
         data = json.loads(text)
         if isinstance(data, list):
-            return [TestRecommendation(**item) for item in data]
+            return _parse_items(data)
     except (json.JSONDecodeError, TypeError, KeyError, ValueError):
         pass
 
@@ -236,7 +247,7 @@ def _parse_ai_response(raw_text: str) -> list[TestRecommendation]:
         try:
             data = json.loads(stripped_block)
             if isinstance(data, list):
-                return [TestRecommendation(**item) for item in data]
+                return _parse_items(data)
         except (json.JSONDecodeError, TypeError, KeyError, ValueError):
             continue
 
@@ -247,7 +258,7 @@ def _parse_ai_response(raw_text: str) -> list[TestRecommendation]:
         try:
             data = json.loads(text[start : end + 1])
             if isinstance(data, list):
-                return [TestRecommendation(**item) for item in data]
+                return _parse_items(data)
         except (json.JSONDecodeError, TypeError, KeyError, ValueError):
             pass
 
@@ -382,8 +393,17 @@ async def analyze_pr(
 
     logger.info("PR has %d changed files", len(changed_files))
 
+    # Validate repo_path if provided by the user
+    if body.repo_path:
+        repo_resolved = Path(body.repo_path).resolve()
+        if not repo_resolved.is_dir():
+            msg = f"repo_path does not exist or is not a directory: {body.repo_path}"
+            raise ValueError(msg)
+        repo_path = str(repo_resolved)
+    else:
+        repo_path = None
+
     # Determine repo path for test mapping
-    repo_path = body.repo_path
     cleanup_repo = False
 
     try:
@@ -395,6 +415,11 @@ async def analyze_pr(
 
         # Map changed files to test files
         test_patterns = body.test_patterns or settings.test_patterns
+        # Validate test_patterns to prevent path traversal
+        for pattern in test_patterns:
+            if ".." in pattern:
+                msg = f"Invalid test pattern (contains '..'): {pattern}"
+                raise ValueError(msg)
         mapper = TestMapper(repo_path, test_patterns)
         test_mappings = mapper.map_changed_files(changed_files)
 

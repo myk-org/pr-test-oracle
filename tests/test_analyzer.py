@@ -2,6 +2,7 @@
 
 import json
 import os
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -247,12 +248,12 @@ class TestFormatPrComment:
 class TestAnalyzePr:
     """Tests for the main analyze_pr function."""
 
-    async def test_successful_analysis(self) -> None:
+    async def test_successful_analysis(self, tmp_path: Path) -> None:
         body = AnalyzeRequest(
             pr_url="https://github.com/owner/repo/pull/1",
             ai_provider="claude",
             ai_model="sonnet",
-            repo_path="/tmp/test-repo",
+            repo_path=str(tmp_path),
         )
         settings = Settings(github_token="test-token")
 
@@ -304,12 +305,12 @@ class TestAnalyzePr:
             == "https://github.com/owner/repo/pull/1#pullrequestreview-1"
         )
 
-    async def test_ai_failure_returns_error_response(self) -> None:
+    async def test_ai_failure_returns_error_response(self, tmp_path: Path) -> None:
         body = AnalyzeRequest(
             pr_url="https://github.com/owner/repo/pull/1",
             ai_provider="claude",
             ai_model="sonnet",
-            repo_path="/tmp/test-repo",
+            repo_path=str(tmp_path),
         )
         settings = Settings(github_token="test-token")
 
