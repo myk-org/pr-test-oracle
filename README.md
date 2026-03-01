@@ -93,7 +93,7 @@ Analyze a PR and return test recommendations.
 | `github_token` | string | No | GitHub token for API access. Overrides the `GITHUB_TOKEN` env var. Required via env var OR per-request payload. |
 | `test_patterns` | list[string] | No | Glob patterns for test file discovery (e.g., `["tests/**/*.py"]`). Overrides the `TEST_PATTERNS` env var. |
 | `post_comment` | boolean | No | Whether to post a comment on the PR (default: true). Set false to get JSON only. |
-| `prompt_file` | string | No | Path to custom prompt file with additional AI instructions |
+| `prompt_file` | string | No | Path to custom prompt file with additional AI instructions. Must be under the repo path or `/app/`. |
 
 #### Response Payload
 
@@ -209,14 +209,15 @@ Request payload values always take precedence over environment variable defaults
 
 ### Custom Prompts
 
-The `PROMPT_FILE` environment variable (or per-request `prompt_file` field) specifies a path to a custom prompt file containing additional AI instructions. If the file exists, its content is appended to the AI prompt as "Additional Instructions".
+PR Test Oracle uses a single custom prompt file, resolved by this fallback chain:
 
-**Behavior:**
+1. **Per-request prompt** (`prompt_file` request field): A path sent by the caller, validated against allowed directories (`repo_path` and `/app/`).
 
-- If `prompt_file` points to an existing file, its content is appended to the main AI prompt
-- If the file does not exist, it is silently skipped (no error is raised)
-- Available via the `PROMPT_FILE` environment variable or the `prompt_file` request field
+2. **Repository-level prompt** (`TESTS_ORACLE_PROMPT.md` in the repo root): Auto-discovered when the server clones or accesses the repository.
 
+3. **Server-level prompt** (`PROMPT_FILE` env var, default `/app/PROMPT.md`): Configured by the server operator.
+
+The first source that exists is used; the others are skipped. If no prompt file is found at any level, the analysis proceeds without additional instructions.
 This allows you to customize AI behavior without modifying the service code. For example, you could provide a custom prompt to enforce specific test naming conventions or add domain-specific guidance.
 
 ## AI Providers

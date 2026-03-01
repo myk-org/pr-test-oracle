@@ -448,23 +448,27 @@ async def analyze_pr(
         # Read test file contents for AI context
         test_contents = mapper.get_test_file_contents(sorted(all_candidates))
 
-        # Validate prompt_file path
-        prompt_file = settings.prompt_file
-        if prompt_file:
-            prompt_path = Path(prompt_file).resolve()
-            # Only allow prompt files under repo_path or /app/
+        # Determine prompt file: request > repo auto-discovery > server env var
+        if body.prompt_file:
+            user_prompt_path = Path(body.prompt_file).resolve()
             allowed_bases = [Path("/app").resolve()]
             if repo_path:
                 allowed_bases.append(Path(repo_path).resolve())
-            if not any(
-                prompt_path == base or prompt_path.is_relative_to(base)
+            if any(
+                user_prompt_path == base or user_prompt_path.is_relative_to(base)
                 for base in allowed_bases
             ):
+                prompt_file = str(user_prompt_path)
+            else:
                 logger.warning(
                     "Rejected prompt file outside allowed directories: %s",
-                    prompt_file,
+                    body.prompt_file,
                 )
                 prompt_file = ""
+        elif (Path(repo_path) / "TESTS_ORACLE_PROMPT.md").is_file():
+            prompt_file = str(Path(repo_path) / "TESTS_ORACLE_PROMPT.md")
+        else:
+            prompt_file = settings.prompt_file
 
         # Build AI prompt
         prompt = _build_ai_prompt(pr_diff, test_mappings, test_contents, prompt_file)
