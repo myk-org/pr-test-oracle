@@ -93,7 +93,7 @@ Analyze a PR and return test recommendations.
 | `github_token` | string | No | GitHub token for API access. Overrides the `GITHUB_TOKEN` env var. Required via env var OR per-request payload. |
 | `test_patterns` | list[string] | No | Glob patterns for test file discovery (e.g., `["tests/**/*.py"]`). Overrides the `TEST_PATTERNS` env var. |
 | `post_comment` | boolean | No | Whether to post a comment on the PR (default: true). Set false to get JSON only. |
-| `prompt_file` | string | No | Path to custom prompt file with additional AI instructions. Must be under the repo path or `/app/`. |
+| `raw_prompt` | string | No | Raw custom prompt text with additional AI instructions, appended to the AI prompt |
 
 #### Response Payload
 
@@ -201,7 +201,6 @@ All settings are loaded from environment variables (or a `.env` file). Every env
 | `AI_CLI_TIMEOUT` | AI CLI timeout in minutes | `10` | `ai_cli_timeout` |
 | `TEST_PATTERNS` | JSON array of glob patterns for test files | `["tests/**/*.py", "test_*.py"]` | `test_patterns` |
 | `POST_COMMENT` | Post recommendations on the PR | true | `post_comment` |
-| `PROMPT_FILE` | Path to custom AI prompt file | `/app/PROMPT.md` | `prompt_file` |
 | `LOG_LEVEL` | Logging level | `INFO` | -- |
 | `DEBUG` | Enable uvicorn auto-reload | `false` | -- |
 
@@ -209,16 +208,30 @@ Request payload values always take precedence over environment variable defaults
 
 ### Custom Prompts
 
-PR Test Oracle uses a single custom prompt file, resolved by this fallback chain:
+PR Test Oracle supports two sources of additional AI instructions, resolved by this fallback chain:
 
-1. **Per-request prompt** (`prompt_file` request field): A path sent by the caller, validated against allowed directories (`repo_path` and `/app/`).
+1. **Per-request prompt** (`raw_prompt` request field): Raw prompt text sent directly in the request body. Takes precedence over repo-level prompts.
 
-2. **Repository-level prompt** (`TESTS_ORACLE_PROMPT.md` in the repo root): Auto-discovered when the server clones or accesses the repository.
+2. **Repository-level prompt** (`TESTS_ORACLE_PROMPT.md` in the repo root): Auto-discovered when the server clones or accesses the repository. Useful for per-repo customization such as domain-specific guidance or test naming conventions.
 
-3. **Server-level prompt** (`PROMPT_FILE` env var, default `/app/PROMPT.md`): Configured by the server operator.
+The first source that exists is used. If neither is provided, the analysis proceeds without additional instructions.
 
-The first source that exists is used; the others are skipped. If no prompt file is found at any level, the analysis proceeds without additional instructions.
-This allows you to customize AI behavior without modifying the service code. For example, you could provide a custom prompt to enforce specific test naming conventions or add domain-specific guidance.
+#### Sending a prompt file as raw text
+
+To send the contents of a local file as the `raw_prompt`:
+
+```bash
+curl -X POST http://localhost:8000/analyze \
+  -H "Content-Type: application/json" \
+  --data @<(jq -n \
+    --arg pr_url "https://github.com/myorg/myrepo/pull/42" \
+    --arg ai_provider "claude" \
+    --arg ai_model "sonnet" \
+    --arg raw_prompt "$(cat /path/to/prompt.md)" \
+    '{pr_url: $pr_url, ai_provider: $ai_provider, ai_model: $ai_model, raw_prompt: $raw_prompt}')
+```
+
+This uses `jq` to properly escape the file content as a JSON string.
 
 ## AI Providers
 

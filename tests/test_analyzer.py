@@ -218,15 +218,15 @@ class TestBuildAiPrompt:
         assert "JSON array" in prompt
         assert "priority" in prompt
 
-    def test_includes_custom_prompt(self, tmp_path) -> None:
-        prompt_file = tmp_path / "PROMPT.md"
-        prompt_file.write_text("Always prioritize integration tests over unit tests.")
-        prompt = _build_ai_prompt("diff", [], {}, str(prompt_file))
+    def test_includes_custom_prompt(self) -> None:
+        prompt = _build_ai_prompt(
+            "diff", [], {}, "Always prioritize integration tests over unit tests."
+        )
         assert "Always prioritize integration tests" in prompt
         assert "Additional Instructions" in prompt
 
-    def test_missing_prompt_file_ignored(self) -> None:
-        prompt = _build_ai_prompt("diff", [], {}, "/nonexistent/PROMPT.md")
+    def test_empty_custom_prompt_ignored(self) -> None:
+        prompt = _build_ai_prompt("diff", [], {}, "")
         assert "Additional Instructions" not in prompt
         assert "diff" in prompt
 
@@ -476,26 +476,19 @@ class TestAnalyzePr:
         mock_gh.post_review.assert_not_called()
         mock_gh.post_comment.assert_not_called()
 
-    async def test_prompt_file_flows_through(self, tmp_path) -> None:
-        """Verify prompt_file flows from request through to AI prompt."""
-        # Create a custom prompt file with unique text
-        prompt_file = tmp_path / "PROMPT.md"
+    async def test_raw_prompt_flows_through(self, tmp_path: Path) -> None:
+        """Verify raw_prompt flows from request through to AI prompt."""
         unique_text = "UNIQUE_CUSTOM_INSTRUCTION_12345"
-        prompt_file.write_text(unique_text)
 
         body = AnalyzeRequest(
             pr_url="https://github.com/owner/repo/pull/1",
             ai_provider="claude",
             ai_model="sonnet",
             repo_path=str(tmp_path),
-            prompt_file=str(prompt_file),
+            raw_prompt=unique_text,
             post_comment=False,
         )
         settings = Settings(github_token="test-token")
-
-        # Merge settings should pick up prompt_file
-        merged = _merge_settings(body, settings)
-        assert merged.prompt_file == str(prompt_file)
 
         ai_response = json.dumps(
             [
@@ -527,9 +520,8 @@ class TestAnalyzePr:
             mock_mapper.map_changed_files.return_value = []
             mock_mapper.get_test_file_contents.return_value = {}
 
-            await analyze_pr(body, merged)
+            await analyze_pr(body, settings)
 
-        # Verify the custom prompt text made it into the AI prompt
         assert captured_prompt is not None
         assert unique_text in captured_prompt
         assert "Additional Instructions" in captured_prompt
@@ -634,78 +626,15 @@ class TestAnalyzePr:
         assert "Additional Instructions" not in captured_prompt
         assert result.recommendations  # Still works fine
 
-    async def test_repo_prompt_takes_precedence_over_server(self, tmp_path: Path) -> None:
-        """TESTS_ORACLE_PROMPT.md in repo takes precedence over server PROMPT_FILE."""
-        # Create server-level prompt file
-        server_prompt = tmp_path / "server-prompt.md"
-        server_prompt.write_text("SERVER_LEVEL_INSTRUCTION_AAA")
-
-        # Create repo-level TESTS_ORACLE_PROMPT.md
-        oracle_prompt = tmp_path / "TESTS_ORACLE_PROMPT.md"
-        oracle_prompt.write_text("REPO_LEVEL_INSTRUCTION_BBB")
-
+    async def test_raw_prompt_used_in_analyze(self, tmp_path: Path) -> None:
+        """Raw prompt text from request is included in AI prompt."""
         body = AnalyzeRequest(
             pr_url="https://github.com/owner/repo/pull/1",
             ai_provider="claude",
             ai_model="sonnet",
             repo_path=str(tmp_path),
             post_comment=False,
-        )
-        settings = Settings(
-            github_token="test-token",
-            prompt_file=str(server_prompt),
-        )
-
-        ai_response = json.dumps(
-            [
-                {
-                    "test_file": "tests/test_auth.py",
-                    "reason": "Changed auth",
-                    "priority": "critical",
-                    "confidence": "high",
-                }
-            ]
-        )
-
-        captured_prompt = None
-
-        async def mock_call_ai_cli(prompt, **kwargs):
-            nonlocal captured_prompt
-            captured_prompt = prompt
-            return True, ai_response
-
-        with (
-            patch("pr_test_oracle.analyzer.GitHubClient") as mock_gh_class,
-            patch("pr_test_oracle.analyzer.TestMapper") as mock_mapper_class,
-            patch("pr_test_oracle.analyzer.call_ai_cli", side_effect=mock_call_ai_cli),
-        ):
-            mock_gh = mock_gh_class.return_value
-            mock_gh.get_pr_diff = AsyncMock(return_value="diff content")
-            mock_gh.get_pr_files = AsyncMock(return_value=["src/auth.py"])
-            mock_mapper = mock_mapper_class.return_value
-            mock_mapper.map_changed_files.return_value = []
-            mock_mapper.get_test_file_contents.return_value = {}
-
-            await analyze_pr(body, settings)
-
-        assert captured_prompt is not None
-        # Repo prompt wins -- server prompt should NOT appear
-        assert "REPO_LEVEL_INSTRUCTION_BBB" in captured_prompt
-        assert "SERVER_LEVEL_INSTRUCTION_AAA" not in captured_prompt
-        assert "Additional Instructions" in captured_prompt
-
-    async def test_user_prompt_file_flows_through(self, tmp_path: Path) -> None:
-        """User-supplied prompt_file is validated and included first in the AI prompt."""
-        user_prompt = tmp_path / "custom-instructions.md"
-        user_prompt.write_text("USER_SUPPLIED_INSTRUCTION_XYZ")
-
-        body = AnalyzeRequest(
-            pr_url="https://github.com/owner/repo/pull/1",
-            ai_provider="claude",
-            ai_model="sonnet",
-            repo_path=str(tmp_path),
-            post_comment=False,
-            prompt_file=str(user_prompt),
+            raw_prompt="USER_SUPPLIED_INSTRUCTION_XYZ",
         )
         settings = Settings(github_token="test-token")
 
@@ -745,61 +674,9 @@ class TestAnalyzePr:
         assert "USER_SUPPLIED_INSTRUCTION_XYZ" in captured_prompt
         assert "Additional Instructions" in captured_prompt
 
-    async def test_user_prompt_file_outside_allowed_dirs_rejected(self, tmp_path: Path) -> None:
-        """User-supplied prompt_file outside allowed directories is rejected."""
-        body = AnalyzeRequest(
-            pr_url="https://github.com/owner/repo/pull/1",
-            ai_provider="claude",
-            ai_model="sonnet",
-            repo_path=str(tmp_path),
-            post_comment=False,
-            prompt_file="/etc/passwd",
-        )
-        settings = Settings(github_token="test-token")
-
-        ai_response = json.dumps(
-            [
-                {
-                    "test_file": "tests/test_auth.py",
-                    "reason": "Changed auth",
-                    "priority": "critical",
-                    "confidence": "high",
-                }
-            ]
-        )
-
-        captured_prompt = None
-
-        async def mock_call_ai_cli(prompt, **kwargs):
-            nonlocal captured_prompt
-            captured_prompt = prompt
-            return True, ai_response
-
-        with (
-            patch("pr_test_oracle.analyzer.GitHubClient") as mock_gh_class,
-            patch("pr_test_oracle.analyzer.TestMapper") as mock_mapper_class,
-            patch("pr_test_oracle.analyzer.call_ai_cli", side_effect=mock_call_ai_cli),
-        ):
-            mock_gh = mock_gh_class.return_value
-            mock_gh.get_pr_diff = AsyncMock(return_value="diff content")
-            mock_gh.get_pr_files = AsyncMock(return_value=["src/auth.py"])
-            mock_mapper = mock_mapper_class.return_value
-            mock_mapper.map_changed_files.return_value = []
-            mock_mapper.get_test_file_contents.return_value = {}
-
-            await analyze_pr(body, settings)
-
-        assert captured_prompt is not None
-        # /etc/passwd should be rejected; no prompt files should contribute
-        # since the default server prompt_file (/app/PROMPT.md) doesn't exist either
-        assert "Additional Instructions" not in captured_prompt
-
     async def test_request_prompt_takes_precedence_over_repo(self, tmp_path: Path) -> None:
-        """Per-request prompt_file takes precedence over TESTS_ORACLE_PROMPT.md in repo."""
-        # Create both: request-level and repo-level prompt files
-        request_prompt = tmp_path / "custom.md"
-        request_prompt.write_text("REQUEST_INSTRUCTION_111")
-
+        """Per-request raw_prompt takes precedence over TESTS_ORACLE_PROMPT.md in repo."""
+        # Create repo-level TESTS_ORACLE_PROMPT.md
         oracle_prompt = tmp_path / "TESTS_ORACLE_PROMPT.md"
         oracle_prompt.write_text("REPO_INSTRUCTION_222")
 
@@ -809,7 +686,7 @@ class TestAnalyzePr:
             ai_model="sonnet",
             repo_path=str(tmp_path),
             post_comment=False,
-            prompt_file=str(request_prompt),
+            raw_prompt="REQUEST_INSTRUCTION_111",
         )
         settings = Settings(github_token="test-token")
 
@@ -846,63 +723,9 @@ class TestAnalyzePr:
             await analyze_pr(body, settings)
 
         assert captured_prompt is not None
-        # Request prompt wins — repo prompt should NOT appear
+        # Request raw_prompt wins — repo prompt should NOT appear
         assert "REQUEST_INSTRUCTION_111" in captured_prompt
         assert "REPO_INSTRUCTION_222" not in captured_prompt
-        assert "Additional Instructions" in captured_prompt
-
-    async def test_server_prompt_fallback_when_no_repo_prompt(self, tmp_path: Path) -> None:
-        """Server PROMPT_FILE is used when no TESTS_ORACLE_PROMPT.md exists in repo."""
-        # Create server-level prompt only (no TESTS_ORACLE_PROMPT.md in tmp_path)
-        server_prompt = tmp_path / "server-prompt.md"
-        server_prompt.write_text("SERVER_FALLBACK_INSTRUCTION_333")
-
-        body = AnalyzeRequest(
-            pr_url="https://github.com/owner/repo/pull/1",
-            ai_provider="claude",
-            ai_model="sonnet",
-            repo_path=str(tmp_path),
-            post_comment=False,
-        )
-        settings = Settings(
-            github_token="test-token",
-            prompt_file=str(server_prompt),
-        )
-
-        ai_response = json.dumps(
-            [
-                {
-                    "test_file": "tests/test_auth.py",
-                    "reason": "Changed auth",
-                    "priority": "critical",
-                    "confidence": "high",
-                }
-            ]
-        )
-
-        captured_prompt = None
-
-        async def mock_call_ai_cli(prompt, **kwargs):
-            nonlocal captured_prompt
-            captured_prompt = prompt
-            return True, ai_response
-
-        with (
-            patch("pr_test_oracle.analyzer.GitHubClient") as mock_gh_class,
-            patch("pr_test_oracle.analyzer.TestMapper") as mock_mapper_class,
-            patch("pr_test_oracle.analyzer.call_ai_cli", side_effect=mock_call_ai_cli),
-        ):
-            mock_gh = mock_gh_class.return_value
-            mock_gh.get_pr_diff = AsyncMock(return_value="diff content")
-            mock_gh.get_pr_files = AsyncMock(return_value=["src/auth.py"])
-            mock_mapper = mock_mapper_class.return_value
-            mock_mapper.map_changed_files.return_value = []
-            mock_mapper.get_test_file_contents.return_value = {}
-
-            await analyze_pr(body, settings)
-
-        assert captured_prompt is not None
-        assert "SERVER_FALLBACK_INSTRUCTION_333" in captured_prompt
         assert "Additional Instructions" in captured_prompt
 
     async def test_missing_github_token_raises(self) -> None:

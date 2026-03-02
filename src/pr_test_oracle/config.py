@@ -66,9 +66,6 @@ class Settings(BaseSettings):
     # PR comment posting (default: true)
     post_comment: bool = True
 
-    # Custom prompt file path
-    prompt_file: str = "/app/PROMPT.md"
-
 
 @lru_cache
 def get_settings() -> Settings:
