@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "AI-powered service that analyzes GitHub PRs and recommends which tests to run"
 requires-python = ">=3.12"
 dependencies = [
+    "ai-cli-runner",
     "fastapi",
     "uvicorn",
     "httpx",
