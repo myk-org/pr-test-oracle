@@ -48,9 +48,9 @@ class AnalyzeRequest(BaseModel):
     post_comment: bool | None = Field(
         default=None, description="Whether to post a comment on the PR (default: true)"
     )
-    prompt_file: str | None = Field(
+    raw_prompt: str | None = Field(
         default=None,
-        description="Path to custom prompt file with additional AI instructions",
+        description="Raw custom prompt text with additional AI instructions",
     )
 
     @field_validator("pr_url")
@@ -63,17 +63,6 @@ class AnalyzeRequest(BaseModel):
                 f"Invalid GitHub PR URL: '{v}'. "
                 "Expected format: https://github.com/owner/repo/pull/123"
             )
-            raise ValueError(msg)
-        return v
-
-    @field_validator("prompt_file")
-    @classmethod
-    def validate_prompt_file(cls, v: str | None) -> str | None:
-        """Validate prompt_file doesn't contain path traversal."""
-        if v is None:
-            return v
-        if ".." in v:
-            msg = "prompt_file must not contain '..'"
             raise ValueError(msg)
         return v
 
