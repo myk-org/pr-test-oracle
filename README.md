@@ -210,7 +210,7 @@ Request payload values always take precedence over environment variable defaults
 
 PR Test Oracle supports two sources of additional AI instructions, resolved by this fallback chain:
 
-1. **Per-request prompt** (`raw_prompt` request field): Raw prompt text sent directly in the request body. Takes precedence over repo-level prompts.
+1. **Per-request prompt** (`raw_prompt` request field): Raw prompt text sent directly in the request body. Takes precedence over repo-level prompts when non-empty (whitespace-only values are treated as empty and fall back to the next source).
 
 2. **Repository-level prompt** (`TESTS_ORACLE_PROMPT.md` in the repo root): Auto-discovered when the server clones or accesses the repository. Useful for per-repo customization such as domain-specific guidance or test naming conventions.
 

@@ -503,7 +503,7 @@ class TestAnalyzePr:
 
         captured_prompt = None
 
-        async def mock_call_ai_cli(prompt, **kwargs):
+        async def mock_call_ai_cli(prompt, **_kwargs):
             nonlocal captured_prompt
             captured_prompt = prompt
             return True, ai_response
@@ -555,7 +555,7 @@ class TestAnalyzePr:
 
         captured_prompt = None
 
-        async def mock_call_ai_cli(prompt, **kwargs):
+        async def mock_call_ai_cli(prompt, **_kwargs):
             nonlocal captured_prompt
             captured_prompt = prompt
             return True, ai_response
@@ -603,7 +603,7 @@ class TestAnalyzePr:
 
         captured_prompt = None
 
-        async def mock_call_ai_cli(prompt, **kwargs):
+        async def mock_call_ai_cli(prompt, **_kwargs):
             nonlocal captured_prompt
             captured_prompt = prompt
             return True, ai_response
@@ -651,7 +651,7 @@ class TestAnalyzePr:
 
         captured_prompt = None
 
-        async def mock_call_ai_cli(prompt, **kwargs):
+        async def mock_call_ai_cli(prompt, **_kwargs):
             nonlocal captured_prompt
             captured_prompt = prompt
             return True, ai_response
@@ -705,7 +705,7 @@ class TestAnalyzePr:
 
         captured_prompt = None
 
-        async def mock_call_ai_cli(prompt, **kwargs):
+        async def mock_call_ai_cli(prompt, **_kwargs):
             nonlocal captured_prompt
             captured_prompt = prompt
             return True, ai_response
@@ -760,7 +760,7 @@ class TestAnalyzePr:
 
         captured_prompt = None
 
-        async def mock_call_ai_cli(prompt, **kwargs):
+        async def mock_call_ai_cli(prompt, **_kwargs):
             nonlocal captured_prompt
             captured_prompt = prompt
             return True, ai_response
