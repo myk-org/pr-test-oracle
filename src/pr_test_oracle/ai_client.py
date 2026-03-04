@@ -14,8 +14,8 @@ from ai_cli_runner import (
 PROVIDER_CONFIG = PROVIDERS
 
 __all__ = [
-    "PROVIDER_CONFIG",
     "PROVIDERS",
+    "PROVIDER_CONFIG",
     "ProviderConfig",
     "VALID_AI_PROVIDERS",
     "call_ai_cli",
